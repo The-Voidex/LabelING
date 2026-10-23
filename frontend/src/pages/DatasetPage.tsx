@@ -1,27 +1,34 @@
+import type { LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   CheckCheck,
+  CheckCircle2,
+  Circle,
   Image as ImageIcon,
+  ImageOff,
+  LayoutGrid,
+  Pencil,
   Search,
   Sparkles,
   Trash2,
   Undo2,
   Upload,
+  X,
 } from 'lucide-react'
 import { useBatchConfirm, useBatchUnconfirm } from '../api/annotations.ts'
 import { useClasses } from '../api/classes.ts'
 import { useBatchDeleteImages, useImages } from '../api/images.ts'
 import { useProjectStats } from '../api/projects.ts'
-import type { ImageStatus, PrelabelJob, Project } from '../api/types.ts'
+import type { PrelabelJob, Project } from '../api/types.ts'
 import { useToast } from '../stores/toast.ts'
 import { ImageGrid } from '../components/ImageGrid.tsx'
 import { ImportDialog } from '../components/ImportDialog.tsx'
 import { PrelabelDialog } from '../components/PrelabelDialog.tsx'
-import { StatusBadge } from '../components/StatusBadge.tsx'
 import {
   Button,
   ConfirmDialog,
@@ -38,13 +45,45 @@ const PAGE_SIZE = 60
 const STAT_CARDS: Array<{
   key: string
   label: string
-  tone: string
+  icon: LucideIcon
+  valueTone: string
+  iconTone: string
 }> = [
-  { key: '', label: '全部图片', tone: 'text-ink' },
-  { key: 'unlabeled', label: '未标注', tone: 'text-muted' },
-  { key: 'labeled', label: '待审核', tone: 'text-warn' },
-  { key: 'confirmed', label: '已确认', tone: 'text-success' },
-  { key: 'missing', label: '文件缺失', tone: 'text-danger' },
+  {
+    key: '',
+    label: '全部图片',
+    icon: LayoutGrid,
+    valueTone: 'text-ink',
+    iconTone: 'bg-panel-2 text-muted',
+  },
+  {
+    key: 'unlabeled',
+    label: '未标注',
+    icon: Circle,
+    valueTone: 'text-ink/80',
+    iconTone: 'bg-panel-2 text-faint',
+  },
+  {
+    key: 'labeled',
+    label: '待审核',
+    icon: Pencil,
+    valueTone: 'text-warn',
+    iconTone: 'bg-warn/10 text-warn',
+  },
+  {
+    key: 'confirmed',
+    label: '已确认',
+    icon: CheckCircle2,
+    valueTone: 'text-success',
+    iconTone: 'bg-success/10 text-success',
+  },
+  {
+    key: 'missing',
+    label: '文件缺失',
+    icon: ImageOff,
+    valueTone: 'text-danger',
+    iconTone: 'bg-danger/10 text-danger',
+  },
 ]
 
 export function DatasetPage() {
@@ -119,6 +158,13 @@ export function DatasetPage() {
     clearSelection()
   }
 
+  const clearSearch = () => {
+    setSearchInput('')
+    setSearch('')
+    setPage(1)
+    clearSelection()
+  }
+
   const openPrelabel = () => {
     if (!project.model_config_id) {
       toast('请先在项目设置中选择模型', 'error')
@@ -186,75 +232,108 @@ export function DatasetPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {STAT_CARDS.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            onClick={() => changeFilter(card.key)}
-            className={cx(
-              'rounded-xl border px-4 py-3 text-left transition-colors',
-              statusFilter === card.key
-                ? 'border-accent/50 bg-accent-soft/40'
-                : 'border-border bg-panel hover:border-border-strong hover:bg-panel-2/60',
-            )}
-          >
-            <div className={cx('text-lg font-semibold', card.tone)}>
-              {formatNumber(statValues[card.key] ?? 0)}
-            </div>
-            <div className="mt-0.5 text-[11px] text-muted">{card.label}</div>
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+        {STAT_CARDS.map((card) => {
+          const Icon = card.icon
+          const active = statusFilter === card.key
+          return (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() => changeFilter(card.key)}
+              className={cx(
+                'group relative overflow-hidden rounded-2xl border px-4 py-3.5 text-left transition-[border-color,background-color,box-shadow]',
+                active
+                  ? 'border-accent/35 bg-accent-soft/45 shadow-card'
+                  : 'border-border bg-panel/75 hover:border-border-strong hover:bg-panel',
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[10px] text-muted">{card.label}</div>
+                  <div
+                    className={cx(
+                      'mt-1.5 text-[23px] font-semibold leading-none tracking-tight tabular-nums',
+                      card.valueTone,
+                    )}
+                  >
+                    {formatNumber(statValues[card.key] ?? 0)}
+                  </div>
+                </div>
+                <span
+                  className={cx(
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors',
+                    card.iconTone,
+                    active && 'ring-1 ring-white/50',
+                  )}
+                >
+                  <Icon size={14} />
+                </span>
+              </div>
+              {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-accent" /> : null}
+            </button>
+          )
+        })}
       </div>
 
       {!project.model_config_id ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warn/25 bg-warn/5 px-4 py-3 text-xs text-warn">
-          当前项目还没有选择模型，无法使用预标注。请点击右上角「项目设置」选择模型，或先到
-          <Link to="/models" className="underline underline-offset-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warn/20 bg-[#FDF8EC] px-4 py-3 text-xs text-warn">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>
+            当前项目还没有选择模型，无法使用预标注。请在「项目设置」中选择模型，或先到
+          </span>
+          <Link to="/models" className="font-medium underline underline-offset-2">
             模型设置
           </Link>
-          创建一套配置。
+          <span>创建配置。</span>
         </div>
       ) : null}
 
       {classes.data && classes.data.length === 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-xs text-muted">
-          还没有类别与提示词。预标注需要每个类别的名称和描述，
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/15 bg-accent-soft/35 px-4 py-3 text-xs text-muted">
+          <AlertCircle size={14} className="shrink-0 text-accent" />
+          <span>还没有类别与提示词，模型预标注需要每个类别的名称和描述。</span>
           <Link
             to={`/projects/${projectId}/classes`}
-            className="text-accent underline underline-offset-2"
+            className="font-medium text-accent underline underline-offset-2"
           >
             去添加类别
           </Link>
-          。
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-panel/70 p-3 shadow-card lg:flex-row lg:items-center">
         <Button variant="primary" onClick={() => setImportOpen(true)}>
           <Upload size={15} />
           导入图片
         </Button>
-        <div className="relative w-64">
+        <div className="relative min-w-0 flex-1 lg:max-w-md">
           <Search
             size={14}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
           />
           <Input
-            className="pl-8"
+            className="pl-8 pr-9"
             value={searchInput}
-            placeholder="搜索文件名或路径"
+            placeholder="搜索文件名，按回车确认"
             onChange={(event) => setSearchInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') submitSearch()
             }}
           />
+          {searchInput ? (
+            <button
+              type="button"
+              aria-label="清空搜索"
+              onClick={clearSearch}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-faint transition-colors hover:bg-panel-2 hover:text-ink"
+            >
+              <X size={12} />
+            </button>
+          ) : null}
         </div>
-        <div className="w-36 shrink-0">
-          <Select
-            value={statusFilter}
-            onChange={(event) => changeFilter(event.target.value)}
-          >
+        <div className="w-full shrink-0 sm:w-40">
+          <Select value={statusFilter} onChange={(event) => changeFilter(event.target.value)}>
             <option value="">全部状态</option>
             <option value="unlabeled">未标注</option>
             <option value="labeled">待审核</option>
@@ -262,46 +341,39 @@ export function DatasetPage() {
             <option value="missing">文件缺失</option>
           </Select>
         </div>
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-faint">
-          <button
-            type="button"
-            onClick={toggleSelectAll}
-            className="rounded-md border border-border bg-panel px-2 py-1 text-muted transition-colors hover:text-ink"
-          >
+        <div className="flex items-center gap-2 lg:ml-auto">
+          <Button size="sm" variant="secondary" onClick={toggleSelectAll}>
+            <CheckCheck size={13} />
             {allSelected ? '取消本页全选' : '全选本页'}
-          </button>
-          <span>共 {formatNumber(images.data?.total ?? 0)} 张</span>
+          </Button>
+          <span className="whitespace-nowrap text-[11px] text-faint">
+            共 {formatNumber(images.data?.total ?? 0)} 张
+          </span>
         </div>
       </div>
 
       {selected.size > 0 ? (
-        <div className="fade-in sticky top-14 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-panel/95 px-4 py-2.5 shadow-panel backdrop-blur">
-          <span className="text-xs text-ink">已选 {selected.size} 张</span>
-          <div className="ml-2 flex flex-wrap items-center gap-2">
+        <div className="fade-in sticky top-4 z-30 flex flex-wrap items-center gap-2 rounded-2xl border border-accent/25 bg-panel/95 px-4 py-2.5 shadow-panel backdrop-blur-xl">
+          <span className="flex h-6 items-center rounded-full bg-accent-soft px-2.5 text-[11px] font-medium text-accent">
+            已选 {selected.size} 张
+          </span>
+          <div className="ml-1 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="primary" onClick={openPrelabel}>
               <Sparkles size={14} />
               预标注
             </Button>
-            <Button
-              size="sm"
-              loading={batchConfirm.isPending}
-              onClick={confirmBatch}
-            >
+            <Button size="sm" loading={batchConfirm.isPending} onClick={confirmBatch}>
               <CheckCheck size={14} />
               批量接受
             </Button>
-            <Button
-              size="sm"
-              loading={batchUnconfirm.isPending}
-              onClick={unconfirmBatch}
-            >
+            <Button size="sm" loading={batchUnconfirm.isPending} onClick={unconfirmBatch}>
               <Undo2 size={14} />
               撤销确认
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              className="text-danger hover:text-danger"
+              className="text-danger hover:bg-danger/8 hover:text-danger"
               onClick={() => setDeleteOpen(true)}
             >
               <Trash2 size={14} />
@@ -310,10 +382,11 @@ export function DatasetPage() {
           </div>
           <button
             type="button"
-            className="ml-auto text-[11px] text-faint hover:text-ink"
+            aria-label="取消选择"
+            className="ml-auto rounded-lg p-1.5 text-faint transition-colors hover:bg-panel-2 hover:text-ink"
             onClick={clearSelection}
           >
-            取消选择
+            <X size={15} />
           </button>
         </div>
       ) : null}
@@ -330,7 +403,7 @@ export function DatasetPage() {
         />
       ) : items.length === 0 ? (
         <EmptyState
-          icon={<ImageIcon size={34} />}
+          icon={<ImageIcon size={28} />}
           title={statusFilter || search ? '没有符合条件的图片' : '还没有图片'}
           description={
             statusFilter || search
@@ -378,7 +451,7 @@ export function DatasetPage() {
                 <ArrowLeft size={14} />
                 上一页
               </Button>
-              <span className="text-[11px] text-muted">
+              <span className="rounded-full border border-border bg-panel px-3 py-1 text-[11px] text-muted">
                 第 {page} / {totalPages} 页
               </span>
               <Button
@@ -397,19 +470,20 @@ export function DatasetPage() {
         </>
       )}
 
-      <div className="flex flex-wrap items-center gap-3 text-[11px] text-faint">
-        <span className="inline-flex items-center gap-1">
-          <StatusBadge status={'unlabeled' as ImageStatus} /> 尚未标注
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] text-faint">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-faint" />
+          未标注
         </span>
-        <span className="inline-flex items-center gap-1">
-          <StatusBadge status={'labeled' as ImageStatus} /> 有框但未确认
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-warn" />
+          有待审核的框
         </span>
-        <span className="inline-flex items-center gap-1">
-          <StatusBadge status={'confirmed' as ImageStatus} /> 审核通过
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-success" />
+          已审核确认
         </span>
-        <span className="ml-auto">
-          点击图片进入标注台；勾选后可批量预标注、接受或删除。
-        </span>
+        <span className="ml-auto">勾选图片可批量预标注、接受或删除</span>
       </div>
 
       <ImportDialog

@@ -62,7 +62,7 @@ export function JobProgress({
         <span className={job.failed > 0 ? 'text-danger' : ''}>失败 {job.failed}</span>
         {job.prompt_tokens + job.completion_tokens > 0 ? (
           <span className="ml-auto font-mono text-faint">
-            tokens：输入 {job.prompt_tokens} · 输出 {job.completion_tokens}
+            用量：输入 {job.prompt_tokens} · 输出 {job.completion_tokens}
           </span>
         ) : null}
       </div>

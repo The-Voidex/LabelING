@@ -21,17 +21,17 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-white hover:bg-[#6e9aff] active:bg-[#4f7ee6] border border-[#6e9aff]/40 shadow-[0_4px_16px_rgba(91,140,255,0.18)]',
+    'border border-accent bg-accent text-white shadow-[0_10px_24px_-16px_rgba(193,79,46,0.8)] hover:bg-accent-hover active:bg-accent-hover',
   secondary:
-    'bg-panel-2 text-ink hover:bg-panel-3 border border-border hover:border-border-strong',
-  ghost: 'bg-transparent text-muted hover:text-ink hover:bg-panel-2 border border-transparent',
+    'border border-border bg-panel text-ink shadow-[0_1px_2px_rgba(39,35,29,0.04)] hover:border-border-strong hover:bg-panel-2/70',
+  ghost: 'border border-transparent text-muted hover:bg-panel-2/80 hover:text-ink',
   danger:
-    'bg-danger/10 text-danger hover:bg-danger/20 border border-danger/30',
+    'border border-danger/25 bg-danger/8 text-danger hover:border-danger/35 hover:bg-danger/12',
 }
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-xs gap-1.5 rounded-lg',
-  md: 'h-9.5 px-4 text-sm gap-2 rounded-lg',
+  sm: 'h-8 gap-1.5 rounded-lg px-3 text-xs',
+  md: 'h-9 gap-2 rounded-[10px] px-4 text-sm',
 }
 
 export function Button({
@@ -49,7 +49,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       className={cx(
-        'inline-flex items-center justify-center font-medium transition-colors whitespace-nowrap',
+        'inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-[background-color,border-color,color,box-shadow] duration-150',
         'disabled:cursor-not-allowed disabled:opacity-45',
         BUTTON_VARIANTS[variant],
         BUTTON_SIZES[size],
@@ -67,9 +67,9 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return (
     <input
       className={cx(
-        'h-9.5 w-full rounded-lg border border-border bg-panel px-3 text-sm text-ink',
-        'placeholder:text-faint outline-none transition-colors',
-        'focus:border-accent/70 focus:ring-2 focus:ring-accent/15',
+        'h-9 w-full rounded-lg border border-border bg-panel px-3 text-sm text-ink shadow-[inset_0_1px_1px_rgba(39,35,29,0.03)]',
+        'placeholder:text-faint outline-none transition-[border-color,box-shadow]',
+        'focus:border-accent/70 focus:ring-2 focus:ring-accent/12',
         className,
       )}
       {...rest}
@@ -84,9 +84,9 @@ export function Textarea({
   return (
     <textarea
       className={cx(
-        'w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-ink',
-        'placeholder:text-faint outline-none transition-colors resize-y',
-        'focus:border-accent/70 focus:ring-2 focus:ring-accent/15',
+        'w-full resize-y rounded-lg border border-border bg-panel px-3 py-2 text-sm leading-relaxed text-ink shadow-[inset_0_1px_1px_rgba(39,35,29,0.03)]',
+        'placeholder:text-faint outline-none transition-[border-color,box-shadow]',
+        'focus:border-accent/70 focus:ring-2 focus:ring-accent/12',
         className,
       )}
       {...rest}
@@ -102,8 +102,8 @@ export function Select({
   return (
     <select
       className={cx(
-        'h-9.5 w-full rounded-lg border border-border bg-panel px-3 text-sm text-ink',
-        'outline-none transition-colors focus:border-accent/70 focus:ring-2 focus:ring-accent/15',
+        'h-9 w-full cursor-pointer rounded-lg border border-border bg-panel px-3 text-sm text-ink shadow-[inset_0_1px_1px_rgba(39,35,29,0.03)]',
+        'outline-none transition-[border-color,box-shadow] focus:border-accent/70 focus:ring-2 focus:ring-accent/12',
         className,
       )}
       {...rest}
@@ -124,7 +124,7 @@ interface FieldProps {
 export function Field({ label, hint, error, children, className }: FieldProps) {
   return (
     <label className={cx('flex flex-col gap-1.5', className)}>
-      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="text-xs font-medium text-ink/85">{label}</span>
       {children}
       {hint ? <span className="text-[11px] leading-relaxed text-faint">{hint}</span> : null}
       {error ? <span className="text-[11px] text-danger">{error}</span> : null}
@@ -170,7 +170,7 @@ export function Dialog({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-ink/30 backdrop-blur-[3px]"
         onClick={onClose}
       />
       <div
@@ -178,16 +178,16 @@ export function Dialog({
         aria-modal="true"
         aria-label={title}
         className={cx(
-          'dialog-pop relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-2xl',
-          'border border-border-strong bg-panel shadow-panel',
+          'dialog-pop relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-[20px]',
+          'border border-border-strong/80 bg-panel shadow-panel',
           width,
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-border/80 px-6 py-5">
           <div>
-            <h2 className="text-base font-semibold text-ink">{title}</h2>
+            <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
             {description ? (
-              <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
+              <p className="mt-1 max-w-md text-xs leading-relaxed text-muted">{description}</p>
             ) : null}
           </div>
           <button
@@ -199,9 +199,9 @@ export function Dialog({
             <X size={17} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer ? (
-          <div className="flex justify-end gap-2 border-t border-border bg-panel/60 px-5 py-3.5">
+          <div className="flex items-center justify-end gap-2 border-t border-border/80 bg-panel-2/45 px-6 py-4">
             {footer}
           </div>
         ) : null}
@@ -273,12 +273,16 @@ export function EmptyState({ icon, title, description, action, className }: Empt
   return (
     <div
       className={cx(
-        'flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border px-6 py-16 text-center',
+        'flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border-strong/80 bg-panel/40 px-6 py-16 text-center',
         className,
       )}
     >
-      {icon ? <div className="text-faint">{icon}</div> : null}
-      <div className="text-sm font-medium text-ink">{title}</div>
+      {icon ? (
+        <div className="mb-1 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-panel text-accent/75 shadow-card">
+          {icon}
+        </div>
+      ) : null}
+      <div className="text-sm font-semibold text-ink">{title}</div>
       {description ? (
         <div className="max-w-md text-xs leading-relaxed text-muted">{description}</div>
       ) : null}
@@ -318,5 +322,24 @@ export function Switch({ checked, onChange, disabled, label }: SwitchProps) {
         )}
       />
     </button>
+  )
+}
+
+export function Kbd({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <kbd
+      className={cx(
+        'inline-flex min-w-5 items-center justify-center rounded-[5px] border border-border bg-panel px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted shadow-[0_1px_0_rgba(39,35,29,0.06)]',
+        className,
+      )}
+    >
+      {children}
+    </kbd>
   )
 }

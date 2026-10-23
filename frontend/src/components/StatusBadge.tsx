@@ -3,9 +3,15 @@ import { STATUS_LABELS } from '../lib/status.ts'
 import { cx } from '../lib/cx.ts'
 
 const TONE: Record<ImageStatus, string> = {
-  unlabeled: 'border-border-strong bg-panel-3 text-muted',
-  labeled: 'border-warn/30 bg-warn/10 text-warn',
-  confirmed: 'border-success/30 bg-success/10 text-success',
+  unlabeled: 'border-border-strong/55 bg-panel/85 text-muted',
+  labeled: 'border-warn/25 bg-[#fff7e6]/90 text-warn',
+  confirmed: 'border-success/25 bg-[#eef7f0]/90 text-success',
+}
+
+const DOT: Record<ImageStatus, string> = {
+  unlabeled: 'bg-faint',
+  labeled: 'bg-warn',
+  confirmed: 'bg-success',
 }
 
 export function StatusBadge({
@@ -21,7 +27,7 @@ export function StatusBadge({
     return (
       <span
         className={cx(
-          'inline-flex items-center gap-1 rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger',
+          'inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-danger/25 bg-[#fdf0ed]/90 px-2 py-0.5 text-[10px] font-medium text-danger backdrop-blur-sm',
           className,
         )}
       >
@@ -33,19 +39,12 @@ export function StatusBadge({
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm',
         TONE[status],
         className,
       )}
     >
-      <span
-        className={cx(
-          'h-1 w-1 rounded-full',
-          status === 'unlabeled' && 'bg-faint',
-          status === 'labeled' && 'bg-warn',
-          status === 'confirmed' && 'bg-success',
-        )}
-      />
+      <span className={cx('h-1 w-1 rounded-full', DOT[status])} />
       {STATUS_LABELS[status]}
     </span>
   )

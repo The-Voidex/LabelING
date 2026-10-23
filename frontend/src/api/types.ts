@@ -104,6 +104,12 @@ export interface ProviderTestResult {
   raw_excerpt: string
 }
 
+export interface ModelDiscoveryResult {
+  models: string[]
+  recommended: string | null
+  count: number
+}
+
 export interface JobError {
   image_id: number
   error_message: string

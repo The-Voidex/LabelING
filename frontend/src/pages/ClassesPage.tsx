@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import {
   ArrowDown,
   ArrowUp,
+  Check,
+  Info,
   Pencil,
   Plus,
   Tags,
@@ -29,16 +31,16 @@ import { cx } from '../lib/cx.ts'
 import { useToast } from '../stores/toast.ts'
 
 const PALETTE = [
-  '#5b8cff',
-  '#22c55e',
-  '#f59e0b',
-  '#ef4444',
-  '#a855f7',
-  '#06b6d4',
-  '#ec4899',
-  '#84cc16',
-  '#f97316',
-  '#14b8a6',
+  '#C14F2E',
+  '#2F6F5E',
+  '#B7791F',
+  '#2F5FA8',
+  '#8B5CF6',
+  '#0E7490',
+  '#BE4B6D',
+  '#6B7F3A',
+  '#D97706',
+  '#4B5563',
 ]
 
 export function ClassesPage() {
@@ -133,11 +135,20 @@ export function ClassesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-ink">类别与提示词</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[19px] font-semibold tracking-[-0.02em] text-ink">
+              类别与提示词
+            </h2>
+            {classes.data ? (
+              <span className="rounded-full border border-border bg-panel px-2 py-0.5 text-[10px] text-muted">
+                {classes.data.length} 个类别
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-xs text-muted">
-            提示词描述目标的外观特征，会随类别名称一起发送给模型，用于预标注。
+            提示词描述目标外观，会随类别名称一起发送给模型，不写入最终导出文件。
           </p>
         </div>
         <Button variant="primary" onClick={openCreate}>
@@ -146,79 +157,94 @@ export function ClassesPage() {
         </Button>
       </div>
 
+      <div className="flex items-start gap-3 rounded-2xl border border-border bg-panel/55 px-4 py-3.5">
+        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <Info size={13} />
+        </span>
+        <p className="text-[11px] leading-relaxed text-muted">
+          写清颜色、形状、材质、朝向和遮挡关系，预标注会更准确。例如：
+          <span className="text-ink">「机器人底盘上带发光灯条的矩形装甲板，可能倾斜安装」</span>。
+        </p>
+      </div>
+
       {classes.isLoading ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="h-20 animate-pulse rounded-xl border border-border bg-panel"
+              className="h-[88px] animate-pulse rounded-2xl border border-border bg-panel/70"
             />
           ))}
         </div>
       ) : classes.data && classes.data.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-border bg-panel">
+        <div className="flex flex-col gap-2.5">
           {classes.data.map((item, index) => (
             <div
               key={item.id}
-              className={cx(
-                'flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-panel-2/60',
-                index !== classes.data!.length - 1 && 'border-b border-border',
-              )}
+              className="group flex items-start gap-3.5 rounded-2xl border border-border bg-panel/75 p-4 shadow-card transition-[border-color,background-color] hover:border-border-strong hover:bg-panel"
             >
-              <div className="flex items-center gap-2 pt-0.5">
+              <div className="relative mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-panel">
                 <span
-                  className="h-3.5 w-3.5 shrink-0 rounded-[4px] border border-white/15"
+                  className="absolute inset-x-0 top-0 h-1.5"
                   style={{ backgroundColor: item.color }}
                 />
-                <span className="w-5 text-center font-mono text-[11px] text-faint">
-                  {index < 9 ? index + 1 : '·'}
+                <span className="mt-1 font-mono text-[11px] text-muted">
+                  {String(index + 1).padStart(2, '0')}
                 </span>
               </div>
+
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-ink">{item.name}</span>
-                  <span className="rounded-full border border-border bg-panel-2 px-2 py-0.5 text-[10px] text-muted">
+                  <h3 className="text-sm font-semibold text-ink">{item.name}</h3>
+                  <span className="rounded-full border border-border bg-panel-2/60 px-2 py-0.5 text-[9px] text-muted">
                     {item.annotation_count} 个标注
                   </span>
+                  {index < 9 ? (
+                    <span className="rounded border border-border px-1 py-px font-mono text-[9px] text-faint">
+                      {index + 1}
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
+                <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted">
                   {item.prompt || '未填写提示词，将使用类别名称作为描述。'}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
+
+              <div className="flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
                   aria-label="上移类别"
                   disabled={index === 0 || reorderClasses.isPending}
                   onClick={() => move(index, -1)}
-                  className="rounded-lg p-1.5 text-faint transition-colors hover:bg-panel-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-panel-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-25"
                 >
-                  <ArrowUp size={15} />
+                  <ArrowUp size={14} />
                 </button>
                 <button
                   type="button"
                   aria-label="下移类别"
                   disabled={index === classes.data!.length - 1 || reorderClasses.isPending}
                   onClick={() => move(index, 1)}
-                  className="rounded-lg p-1.5 text-faint transition-colors hover:bg-panel-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-panel-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-25"
                 >
-                  <ArrowDown size={15} />
+                  <ArrowDown size={14} />
                 </button>
+                <span className="mx-1 h-4 w-px bg-border" />
                 <button
                   type="button"
                   aria-label="编辑类别"
                   onClick={() => openEdit(item)}
-                  className="rounded-lg p-1.5 text-faint transition-colors hover:bg-panel-3 hover:text-ink"
+                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-panel-2 hover:text-ink"
                 >
-                  <Pencil size={15} />
+                  <Pencil size={14} />
                 </button>
                 <button
                   type="button"
                   aria-label="删除类别"
                   onClick={() => setDeleteTarget(item)}
-                  className="rounded-lg p-1.5 text-faint transition-colors hover:bg-danger/10 hover:text-danger"
+                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={14} />
                 </button>
               </div>
             </div>
@@ -226,7 +252,7 @@ export function ClassesPage() {
         </div>
       ) : (
         <EmptyState
-          icon={<Tags size={34} />}
+          icon={<Tags size={28} />}
           title="还没有类别"
           description="先添加类别并写清目标外观。预标注时每个类别都会携带自己的提示词描述。"
           action={
@@ -262,7 +288,7 @@ export function ClassesPage() {
               onChange={(event) => setName(event.target.value)}
             />
           </Field>
-          <Field label="颜色">
+          <Field label="标记颜色">
             <div className="flex flex-wrap items-center gap-2">
               {PALETTE.map((item) => (
                 <button
@@ -271,13 +297,17 @@ export function ClassesPage() {
                   aria-label={`选择颜色 ${item}`}
                   onClick={() => setColor(item)}
                   className={cx(
-                    'h-7 w-7 rounded-lg border transition-transform',
+                    'relative flex h-7 w-7 items-center justify-center rounded-lg border transition-transform',
                     color === item
-                      ? 'scale-110 border-white/70 ring-2 ring-white/20'
-                      : 'border-white/10 hover:scale-105',
+                      ? 'scale-110 border-ink/25 ring-2 ring-ink/10'
+                      : 'border-black/5 hover:scale-105',
                   )}
                   style={{ backgroundColor: item }}
-                />
+                >
+                  {color === item ? (
+                    <Check size={13} strokeWidth={3} className="text-white drop-shadow" />
+                  ) : null}
+                </button>
               ))}
               <input
                 type="color"
@@ -295,7 +325,7 @@ export function ClassesPage() {
             <Textarea
               rows={4}
               value={prompt}
-              placeholder="例如：机器人底盘上的矩形装甲板，通常带 LED 灯条，可能倾斜安装，颜色为红或蓝。"
+              placeholder="例如：机器人底盘上的矩形装甲板，通常带发光灯条，可能倾斜安装，颜色为红或蓝。"
               onChange={(event) => setPrompt(event.target.value)}
             />
           </Field>

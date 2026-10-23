@@ -1,21 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
+  Bot,
+  Check,
+  ChevronDown,
+  Cloud,
   Cpu,
   KeyRound,
   Pencil,
-  Plus,
+  Plug,
   PlugZap,
+  Plus,
+  RefreshCw,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import {
   useCreateModelConfig,
   useDeleteModelConfig,
+  useDiscoverModels,
   useModelConfigs,
   useTestDraftModelConfig,
   useTestModelConfig,
   useUpdateModelConfig,
 } from '../api/models.ts'
-import type { ModelConfig, ModelParams, ProviderTestResult, ProviderType } from '../api/types.ts'
+import type {
+  ModelConfig,
+  ModelParams,
+  ProviderTestResult,
+  ProviderType,
+} from '../api/types.ts'
+import {
+  DEFAULT_PRESET_ID,
+  PROVIDER_PRESETS,
+  defaultConfigName,
+  findProviderPreset,
+  getProviderPreset,
+  providerDisplayName,
+} from '../lib/modelPresets.ts'
+import type { ProviderPreset, ProviderPresetId } from '../lib/modelPresets.ts'
 import {
   Button,
   ConfirmDialog,
@@ -23,10 +45,10 @@ import {
   EmptyState,
   Field,
   Input,
-  Select,
   Switch,
   Textarea,
 } from '../components/ui.tsx'
+import { cx } from '../lib/cx.ts'
 import { useToast } from '../stores/toast.ts'
 
 const DEFAULT_PARAMS: ModelParams = {
@@ -40,9 +62,11 @@ const DEFAULT_PARAMS: ModelParams = {
   extra_instructions: '',
 }
 
-const PROVIDER_LABELS: Record<ProviderType, string> = {
-  openai_compat: 'OpenAI 兼容接口',
-  mock: '模拟模型（仅开发测试）',
+function PresetIcon({ id }: { id: ProviderPresetId }) {
+  if (id === 'deepseek') return <Sparkles size={16} />
+  if (id === 'dashscope') return <Cloud size={16} />
+  if (id === 'zhipu') return <Bot size={16} />
+  return <Plug size={16} />
 }
 
 export function ModelsPage() {
@@ -54,18 +78,24 @@ export function ModelsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ModelConfig | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ModelConfig | null>(null)
+  const [testingId, setTestingId] = useState<number | null>(null)
 
   const runTest = (config: ModelConfig) => {
+    setTestingId(config.id)
     testModel.mutate(config.id, {
       onSuccess: (result) => {
+        setTestingId(null)
         toast(
           result.ok
-            ? `${result.message}（耗时 ${result.latency_ms} ms）`
+            ? `${result.message}（耗时 ${result.latency_ms} 毫秒）`
             : result.message,
           result.ok ? 'success' : 'error',
         )
       },
-      onError: (error) => toast(error.message, 'error'),
+      onError: (error) => {
+        setTestingId(null)
+        toast(error.message, 'error')
+      },
     })
   }
 
@@ -81,12 +111,18 @@ export function ModelsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-end justify-between gap-4">
+    <div className="flex flex-col gap-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-ink">模型设置</h1>
-          <p className="mt-1 text-xs text-muted">
-            配置 OpenAI 兼容的视觉模型接口。支持千问、DeepSeek 等国内平台，也可以先使用模拟模型体验流程。
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-panel/60 px-2.5 py-1 text-[10px] text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            预标注引擎
+          </div>
+          <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.035em] text-ink">
+            模型设置
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted">
+            选择服务商、粘贴接口密钥即可完成配置。接口地址和默认视觉模型会自动填好，也可以从接口读取完整模型列表。
           </p>
         </div>
         <Button
@@ -102,99 +138,142 @@ export function ModelsPage() {
       </div>
 
       {configs.isLoading ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {Array.from({ length: 2 }).map((_, index) => (
             <div
               key={index}
-              className="h-40 animate-pulse rounded-2xl border border-border bg-panel"
+              className="h-56 animate-pulse rounded-2xl border border-border bg-panel/70"
             />
           ))}
         </div>
       ) : configs.data && configs.data.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {configs.data.map((config) => (
-            <div
-              key={config.id}
-              className="flex flex-col rounded-2xl border border-border bg-panel p-5"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-accent/20 bg-accent-soft/50 text-accent">
-                  <Cpu size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold text-ink">{config.name}</h2>
-                    <span className="rounded-full border border-border bg-panel-2 px-2 py-0.5 text-[10px] text-muted">
-                      {PROVIDER_LABELS[config.provider_type]}
-                    </span>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {configs.data.map((config) => {
+            const isMock = config.provider_type === 'mock'
+            const ready = isMock || (config.has_api_key && Boolean(config.model_name))
+            return (
+              <article
+                key={config.id}
+                className="flex flex-col rounded-2xl border border-border bg-panel/80 p-5 shadow-card transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-panel"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={cx(
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                      isMock
+                        ? 'bg-warn/10 text-warn'
+                        : 'bg-[#E6EBF5] text-[#385C91]',
+                    )}
+                  >
+                    {isMock ? <Sparkles size={18} /> : <Cpu size={18} />}
                   </div>
-                  <div className="mt-1.5 text-xs text-muted">
-                    {config.provider_type === 'mock'
-                      ? '不发起网络请求，返回固定位置的测试框。'
-                      : `${config.model_name || '未填写模型'} · ${config.base_url || '未填写 Base URL'}`}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold text-ink">{config.name}</h2>
+                      <span className="rounded-full border border-border bg-panel-2/60 px-2 py-0.5 text-[9px] text-muted">
+                        {isMock ? '模拟模型' : providerDisplayName(config.base_url)}
+                      </span>
+                    </div>
+                    <div className="mt-1 truncate text-[11px] text-muted">
+                      {isMock
+                        ? '不发起网络请求，返回固定位置的测试框。'
+                        : config.model_name || '未填写模型名称'}
+                    </div>
+                    {!isMock ? (
+                      <div className="mt-0.5 truncate font-mono text-[9px] text-faint">
+                        {config.base_url || '未填写接口地址'}
+                      </div>
+                    ) : null}
                   </div>
+                  <span
+                    className={cx(
+                      'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px]',
+                      ready ? 'bg-success/8 text-success' : 'bg-warn/8 text-warn',
+                    )}
+                  >
+                    <span
+                      className={cx(
+                        'h-1 w-1 rounded-full',
+                        ready ? 'bg-success' : 'bg-warn',
+                      )}
+                    />
+                    {ready ? '可使用' : '待完善'}
+                  </span>
                 </div>
-              </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-muted sm:grid-cols-4">
-                <div className="rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="text-ink">{config.params.concurrency}</div>
-                  <div>并发数</div>
-                </div>
-                <div className="rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="text-ink">{config.params.max_image_side} px</div>
-                  <div>长边上限</div>
-                </div>
-                <div className="rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="text-ink">{config.params.timeout_s} s</div>
-                  <div>超时</div>
-                </div>
-                <div className="rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="flex items-center gap-1 truncate text-ink">
-                    <KeyRound size={11} />
-                    {config.has_api_key ? config.api_key_masked : '未设置'}
+                <div className="mt-4 grid grid-cols-2 divide-border/80 overflow-hidden rounded-xl border border-border/80 bg-panel-2/45 text-[10px] sm:grid-cols-4 sm:divide-x">
+                  <div className="px-3 py-2.5">
+                    <div className="text-faint">并发数</div>
+                    <div className="mt-0.5 font-mono text-xs text-ink">
+                      {config.params.concurrency}
+                    </div>
                   </div>
-                  <div>API Key</div>
+                  <div className="px-3 py-2.5">
+                    <div className="text-faint">图片长边</div>
+                    <div className="mt-0.5 font-mono text-xs text-ink">
+                      {config.params.max_image_side} 像素
+                    </div>
+                  </div>
+                  <div className="px-3 py-2.5">
+                    <div className="text-faint">请求超时</div>
+                    <div className="mt-0.5 font-mono text-xs text-ink">
+                      {config.params.timeout_s} 秒
+                    </div>
+                  </div>
+                  <div className="px-3 py-2.5">
+                    <div className="flex items-center gap-1 text-faint">
+                      <KeyRound size={9} />
+                      接口密钥
+                    </div>
+                    <div className="mt-0.5 truncate font-mono text-[10px] text-ink">
+                      {isMock
+                        ? '无需密钥'
+                        : config.has_api_key
+                          ? config.api_key_masked
+                          : '未设置'}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-4 flex items-center gap-2">
-                <Button
-                  size="sm"
-                  loading={testModel.isPending}
-                  onClick={() => runTest(config)}
-                >
-                  <PlugZap size={14} />
-                  测试连接
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditing(config)
-                    setDialogOpen(true)
-                  }}
-                >
-                  <Pencil size={14} />
-                  编辑
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto text-faint hover:text-danger"
-                  onClick={() => setDeleteTarget(config)}
-                >
-                  <Trash2 size={14} />
-                  删除
-                </Button>
-              </div>
-            </div>
-          ))}
+                <div className="mt-4 flex items-center gap-2 border-t border-border/70 pt-4">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={testingId === config.id}
+                    onClick={() => runTest(config)}
+                  >
+                    <PlugZap size={14} />
+                    测试连接
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditing(config)
+                      setDialogOpen(true)
+                    }}
+                  >
+                    <Pencil size={14} />
+                    编辑
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto text-faint hover:bg-danger/8 hover:text-danger"
+                    onClick={() => setDeleteTarget(config)}
+                  >
+                    <Trash2 size={14} />
+                    删除
+                  </Button>
+                </div>
+              </article>
+            )
+          })}
         </div>
       ) : (
         <EmptyState
-          icon={<Cpu size={34} />}
+          icon={<Cpu size={28} />}
           title="还没有模型配置"
-          description="配置一个 OpenAI 兼容接口后，项目就可以调用它做预标注。没有 API Key 时，可以先创建模拟模型体验完整流程。"
+          description="选择 DeepSeek、阿里云百炼或智谱，粘贴接口密钥就能创建视觉模型配置。没有密钥时，也可以先用模拟模型体验流程。"
           action={
             <Button
               variant="primary"
@@ -210,11 +289,13 @@ export function ModelsPage() {
         />
       )}
 
-      <ModelConfigDialog
-        open={dialogOpen}
-        editing={editing}
-        onClose={() => setDialogOpen(false)}
-      />
+      {dialogOpen ? (
+        <ModelConfigDialog
+          open
+          editing={editing}
+          onClose={() => setDialogOpen(false)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -242,48 +323,87 @@ function ModelConfigDialog({
   const createConfig = useCreateModelConfig()
   const updateConfig = useUpdateModelConfig()
   const testDraft = useTestDraftModelConfig()
+  const discoverModels = useDiscoverModels()
   const toast = useToast()
 
-  const [name, setName] = useState('')
-  const [providerType, setProviderType] = useState<ProviderType>('openai_compat')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [modelName, setModelName] = useState('')
-  const [params, setParams] = useState<ModelParams>(DEFAULT_PARAMS)
-  const [headersText, setHeadersText] = useState('')
-  const [testResult, setTestResult] = useState<ProviderTestResult | null>(null)
-  const [headersError, setHeadersError] = useState('')
+  const initialPreset =
+    editing?.provider_type === 'openai_compat'
+      ? findProviderPreset(editing.base_url) ?? getProviderPreset('custom')
+      : getProviderPreset(DEFAULT_PRESET_ID)
 
-  const resetFromEditing = () => {
-    if (editing) {
-      setName(editing.name)
-      setProviderType(editing.provider_type)
-      setBaseUrl(editing.base_url)
-      setApiKey('')
-      setModelName(editing.model_name)
-      setParams({ ...DEFAULT_PARAMS, ...editing.params })
-      setHeadersText(
-        Object.keys(editing.params.extra_headers ?? {}).length
-          ? JSON.stringify(editing.params.extra_headers, null, 2)
-          : '',
-      )
-    } else {
-      setName('')
-      setProviderType('openai_compat')
-      setBaseUrl('')
-      setApiKey('')
-      setModelName('')
-      setParams(DEFAULT_PARAMS)
-      setHeadersText('')
-    }
+  const [name, setName] = useState(
+    editing?.name ?? defaultConfigName(initialPreset),
+  )
+  const [autoName, setAutoName] = useState(!editing)
+  const [providerType, setProviderType] = useState<ProviderType>(
+    editing?.provider_type ?? 'openai_compat',
+  )
+  const [presetId, setPresetId] = useState<ProviderPresetId>(
+    editing?.provider_type === 'mock' ? 'custom' : initialPreset.id,
+  )
+  const [baseUrl, setBaseUrl] = useState(editing?.base_url ?? initialPreset.baseUrl)
+  const [apiKey, setApiKey] = useState('')
+  const [modelName, setModelName] = useState(
+    editing?.model_name ?? initialPreset.defaultModel,
+  )
+  const [models, setModels] = useState<string[]>(initialPreset.suggestedModels)
+  const [recommended, setRecommended] = useState<string | null>(
+    editing?.model_name ?? initialPreset.defaultModel ?? null,
+  )
+  const [params, setParams] = useState<ModelParams>({
+    ...DEFAULT_PARAMS,
+    ...(editing?.params ?? {}),
+  })
+  const [headersText, setHeadersText] = useState(
+    editing && Object.keys(editing.params.extra_headers ?? {}).length
+      ? JSON.stringify(editing.params.extra_headers, null, 2)
+      : '',
+  )
+  const [headersError, setHeadersError] = useState('')
+  const [testResult, setTestResult] = useState<ProviderTestResult | null>(null)
+  const [discoveryError, setDiscoveryError] = useState('')
+
+  const preset = getProviderPreset(presetId)
+  const modelOptions = Array.from(
+    new Set(
+      [
+        ...models,
+        ...preset.suggestedModels,
+        ...(recommended ? [recommended] : []),
+        ...(modelName.trim() ? [modelName.trim()] : []),
+      ].filter(Boolean),
+    ),
+  )
+
+  const applyPreset = (nextPreset: ProviderPreset) => {
+    setProviderType('openai_compat')
+    setPresetId(nextPreset.id)
+    setBaseUrl(nextPreset.baseUrl)
+    setModelName(nextPreset.defaultModel)
+    setModels(nextPreset.suggestedModels)
+    setRecommended(nextPreset.defaultModel || null)
+    setDiscoveryError('')
     setTestResult(null)
-    setHeadersError('')
+    if (autoName) setName(defaultConfigName(nextPreset))
   }
 
-  useEffect(() => {
-    if (open) resetFromEditing()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editing])
+  const applyMock = () => {
+    setProviderType('mock')
+    setPresetId('custom')
+    setDiscoveryError('')
+    setTestResult(null)
+    if (autoName) setName('模拟模型')
+  }
+
+  const changeBaseUrl = (value: string) => {
+    setBaseUrl(value)
+    setModels([])
+    setRecommended(null)
+    setDiscoveryError('')
+    setTestResult(null)
+    const matched = findProviderPreset(value)
+    setPresetId(matched?.id ?? 'custom')
+  }
 
   const parseHeaders = (): Record<string, string> | null => {
     const text = headersText.trim()
@@ -307,11 +427,18 @@ function ModelConfigDialog({
     }
   }
 
+  const effectiveName = () => {
+    return (
+      name.trim() ||
+      (providerType === 'mock' ? '模拟模型' : defaultConfigName(preset))
+    )
+  }
+
   const buildPayload = () => {
     const headers = parseHeaders()
     if (headers === null) return null
     return {
-      name: name.trim(),
+      name: effectiveName(),
       provider_type: providerType,
       base_url: providerType === 'mock' ? '' : baseUrl.trim(),
       api_key: providerType === 'mock' ? '' : apiKey,
@@ -323,11 +450,21 @@ function ModelConfigDialog({
     }
   }
 
-  const save = () => {
-    if (!name.trim()) {
-      toast('请填写配置名称', 'error')
-      return
+  const validate = () => {
+    if (providerType === 'mock') return true
+    if (!baseUrl.trim()) {
+      toast('请填写接口地址', 'error')
+      return false
     }
+    if (!modelName.trim()) {
+      toast('请填写或选择视觉模型', 'error')
+      return false
+    }
+    return true
+  }
+
+  const save = () => {
+    if (!validate()) return
     const payload = buildPayload()
     if (!payload) return
     if (editing) {
@@ -359,10 +496,11 @@ function ModelConfigDialog({
   }
 
   const runTest = () => {
+    if (!validate()) return
     const payload = buildPayload()
     if (!payload) return
     testDraft.mutate(
-      { ...payload, name: payload.name || '临时测试' },
+      editing ? { ...payload, config_id: editing.id } : payload,
       {
         onSuccess: (result) => setTestResult(result),
         onError: (error) => toast(error.message, 'error'),
@@ -370,210 +508,420 @@ function ModelConfigDialog({
     )
   }
 
+  const discover = () => {
+    if (!baseUrl.trim()) {
+      toast('请先填写接口地址', 'error')
+      return
+    }
+    if (!apiKey.trim() && !editing?.has_api_key) {
+      toast('请先填写接口密钥，再获取模型列表', 'error')
+      return
+    }
+    discoverModels.mutate(
+      {
+        provider_type: 'openai_compat',
+        base_url: baseUrl.trim(),
+        api_key: apiKey.trim(),
+        config_id: editing?.id,
+        default_model: modelName.trim() || preset.defaultModel || undefined,
+      },
+      {
+        onSuccess: (result) => {
+          setModels(result.models)
+          setRecommended(result.recommended)
+          setDiscoveryError('')
+          if (result.recommended) setModelName(result.recommended)
+          toast(
+            `已获取 ${result.count} 个模型${result.recommended ? `，推荐 ${result.recommended}` : ''}`,
+            'success',
+          )
+        },
+        onError: (error) => {
+          setDiscoveryError(error.message)
+          toast(error.message, 'error')
+        },
+      },
+    )
+  }
+
   const saving = createConfig.isPending || updateConfig.isPending
+  const savedKeyHint = editing?.has_api_key
+    ? `已保存 ${editing.api_key_masked}，留空表示不修改。`
+    : '仅保存在本机数据库，不会回传到浏览器。'
 
   return (
     <Dialog
       open={open}
       title={editing ? '编辑模型配置' : '新建模型配置'}
-      description="图片会以 Base64 发送到该接口，接口需要支持视觉输入并返回检测框坐标。"
+      description={
+        editing
+          ? '修改服务商、视觉模型或接口密钥；接口密钥留空会保留原值。'
+          : '选择服务商后，接口地址和视觉模型会自动填好，通常只需要粘贴接口密钥。'
+      }
       width="max-w-2xl"
-      onClose={() => {
-        onClose()
-        resetFromEditing()
-      }}
+      onClose={onClose}
       footer={
         <>
           <Button loading={testDraft.isPending} onClick={runTest}>
             <PlugZap size={15} />
             测试连接
           </Button>
-          <Button
-            onClick={() => {
-              onClose()
-              resetFromEditing()
-            }}
-          >
-            取消
-          </Button>
+          <Button onClick={onClose}>取消</Button>
           <Button variant="primary" loading={saving} onClick={save}>
             保存配置
           </Button>
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="配置名称">
-            <Input
-              value={name}
-              placeholder="例如：千问 VL Max"
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
-          <Field label="接口类型">
-            <Select
-              value={providerType}
-              onChange={(event) => {
-                setProviderType(event.target.value as ProviderType)
-                setTestResult(null)
-              }}
-            >
-              <option value="openai_compat">OpenAI 兼容接口</option>
-              <option value="mock">模拟模型（仅开发测试）</option>
-            </Select>
-          </Field>
-        </div>
-
-        {providerType === 'mock' ? (
-          <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-xs leading-relaxed text-muted">
-            模拟模型不会请求外部接口，会在每张图片上为每个类别返回一个固定位置的框，用于验证导入、预标注、审核与导出流程。
+      <div className="flex flex-col gap-5">
+        <section className="flex flex-col gap-3.5">
+          <div>
+            <div className="mb-2 text-[10px] font-medium tracking-[0.12em] text-faint">
+              选择服务商
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {PROVIDER_PRESETS.map((item) => {
+                const active =
+                  providerType === 'openai_compat' && presetId === item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => applyPreset(item)}
+                    className={cx(
+                      'relative flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors',
+                      active
+                        ? 'border-accent/40 bg-accent-soft/50'
+                        : 'border-border bg-panel hover:bg-panel-2/55',
+                    )}
+                  >
+                    <span
+                      className={cx(
+                        'flex h-7 w-7 items-center justify-center rounded-lg',
+                        active
+                          ? 'bg-panel text-accent'
+                          : 'bg-panel-2/70 text-muted',
+                      )}
+                    >
+                      <PresetIcon id={item.id} />
+                    </span>
+                    <span>
+                      <span className="block text-[11px] font-medium text-ink">
+                        {item.name}
+                      </span>
+                      <span className="mt-0.5 block text-[9px] leading-relaxed text-faint">
+                        {item.description}
+                      </span>
+                    </span>
+                    {active ? (
+                      <Check
+                        size={12}
+                        className="absolute right-2.5 top-2.5 text-accent"
+                        strokeWidth={3}
+                      />
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        ) : (
-          <>
-            <Field
-              label="Base URL"
-              hint="填写包含版本号的完整地址，例如 https://dashscope.aliyuncs.com/compatible-mode/v1；程序会自动拼接 /chat/completions。"
+
+          <button
+            type="button"
+            onClick={applyMock}
+            className={cx(
+              'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors',
+              providerType === 'mock'
+                ? 'border-warn/30 bg-warn/5'
+                : 'border-border bg-panel hover:bg-panel-2/55',
+            )}
+          >
+            <span
+              className={cx(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+                providerType === 'mock'
+                  ? 'bg-warn/10 text-warn'
+                  : 'bg-panel-2/70 text-muted',
+              )}
             >
-              <Input
-                value={baseUrl}
-                placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
-                onChange={(event) => setBaseUrl(event.target.value)}
-              />
-            </Field>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field
-                label="API Key"
-                hint={
-                  editing?.has_api_key
-                    ? `已保存 ${editing.api_key_masked}，留空表示不修改。`
-                    : '仅保存在本机，不会回传到浏览器。'
-                }
-              >
+              <Cpu size={14} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-medium text-ink">模拟模型</span>
+              <span className="mt-0.5 block text-[9px] text-faint">
+                没有接口密钥时，用固定测试框体验完整流程
+              </span>
+            </span>
+            {providerType === 'mock' ? (
+              <span className="flex items-center gap-1 text-[10px] text-warn">
+                <Check size={12} strokeWidth={3} />
+                已选择
+              </span>
+            ) : (
+              <span className="text-[9px] text-faint">无需联网</span>
+            )}
+          </button>
+
+          {providerType === 'mock' ? (
+            <div className="rounded-xl border border-warn/20 bg-warn/5 px-4 py-3 text-xs leading-relaxed text-muted">
+              模拟模型会在每张图片上为每个类别返回一个固定位置的框，用于验证导入、预标注、审核与导出流程。
+            </div>
+          ) : (
+            <>
+              <Field label="接口密钥" hint={savedKeyHint}>
                 <Input
                   type="password"
+                  autoFocus
                   value={apiKey}
-                  placeholder={editing?.has_api_key ? '留空则不修改' : 'sk-...'}
-                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder={editing?.has_api_key ? '留空则保持原密钥' : '粘贴服务商提供的接口密钥'}
+                  onChange={(event) => {
+                    setApiKey(event.target.value)
+                    setTestResult(null)
+                  }}
                 />
               </Field>
-              <Field label="模型名称" hint="以服务商文档为准，例如 qwen-vl-max。">
-                <Input
-                  value={modelName}
-                  placeholder="qwen-vl-max"
-                  onChange={(event) => setModelName(event.target.value)}
-                />
-              </Field>
-            </div>
-          </>
-        )}
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <Field label="并发数" hint="同时请求的图片数，过高容易触发限流。">
-            <Input
-              type="number"
-              min={1}
-              max={16}
-              value={params.concurrency}
-              onChange={(event) =>
-                setParams((prev) => ({ ...prev, concurrency: Number(event.target.value) }))
-              }
-            />
-          </Field>
-          <Field label="图片长边上限（px）" hint="发送前等比缩小，降低 token 消耗。">
-            <Input
-              type="number"
-              min={256}
-              max={4096}
-              step={64}
-              value={params.max_image_side}
-              onChange={(event) =>
-                setParams((prev) => ({ ...prev, max_image_side: Number(event.target.value) }))
-              }
-            />
-          </Field>
-          <Field label="超时（秒）">
-            <Input
-              type="number"
-              min={5}
-              max={600}
-              value={params.timeout_s}
-              onChange={(event) =>
-                setParams((prev) => ({ ...prev, timeout_s: Number(event.target.value) }))
-              }
-            />
-          </Field>
-          <Field label="温度">
-            <Input
-              type="number"
-              min={0}
-              max={2}
-              step={0.1}
-              value={params.temperature}
-              onChange={(event) =>
-                setParams((prev) => ({ ...prev, temperature: Number(event.target.value) }))
-              }
-            />
-          </Field>
-          <Field label="最大 tokens">
-            <Input
-              type="number"
-              min={128}
-              max={16384}
-              step={128}
-              value={params.max_tokens}
-              onChange={(event) =>
-                setParams((prev) => ({ ...prev, max_tokens: Number(event.target.value) }))
-              }
-            />
-          </Field>
-          <div className="flex flex-col justify-center gap-1.5">
-            <span className="text-xs font-medium text-muted">JSON 模式</span>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={params.json_mode}
-                label="JSON 模式"
-                onChange={(checked) =>
-                  setParams((prev) => ({ ...prev, json_mode: checked }))
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border/80 bg-panel-2/40 px-3 py-2">
+                <span className="shrink-0 text-[9px] text-faint">接口地址</span>
+                <span className="min-w-0 truncate font-mono text-[9px] text-muted">
+                  {baseUrl || '在高级设置中填写'}
+                </span>
+              </div>
+
+              <Field
+                label="视觉模型"
+                hint={
+                  models.length > preset.suggestedModels.length
+                    ? `已获取 ${models.length} 个模型${recommended ? `，推荐 ${recommended}` : ''}`
+                    : `${preset.defaultModel ? `默认 ${preset.defaultModel}，` : ''}可粘贴密钥后从接口获取模型列表`
                 }
-              />
-              <span className="text-[11px] text-faint">
-                部分服务商需要开启，也可能不支持
-              </span>
-            </div>
+                error={discoveryError || null}
+              >
+                <div className="flex gap-2">
+                  <Input
+                    list="labeling-model-options"
+                    value={modelName}
+                    placeholder={preset.defaultModel || '例如：qwen-vl-max'}
+                    onChange={(event) => {
+                      setModelName(event.target.value)
+                      setTestResult(null)
+                    }}
+                  />
+                  <datalist id="labeling-model-options">
+                    {modelOptions.map((model) => (
+                      <option key={model} value={model}>
+                        {model === recommended ? '推荐模型' : model}
+                      </option>
+                    ))}
+                  </datalist>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-9 shrink-0"
+                    loading={discoverModels.isPending}
+                    disabled={
+                      !baseUrl.trim() || (!apiKey.trim() && !editing?.has_api_key)
+                    }
+                    onClick={discover}
+                  >
+                    <RefreshCw size={13} />
+                    获取模型
+                  </Button>
+                </div>
+              </Field>
+
+              {presetId === 'custom' ? (
+                <Field
+                  label="接口地址"
+                  hint="填写包含版本号的完整地址；程序会自动拼接对话接口和模型列表接口。"
+                >
+                  <Input
+                    value={baseUrl}
+                    placeholder="https://example.com/v1"
+                    onChange={(event) => changeBaseUrl(event.target.value)}
+                  />
+                </Field>
+              ) : null}
+            </>
+          )}
+        </section>
+
+        <details className="group rounded-xl border border-border bg-panel-2/25">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[11px] font-medium text-muted transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+            <ChevronDown
+              size={13}
+              className="text-faint transition-transform group-open:rotate-180"
+            />
+            高级设置
+            <span className="text-[9px] font-normal text-faint">
+              配置名称、接口地址与运行参数
+            </span>
+          </summary>
+          <div className="flex flex-col gap-4 border-t border-border/70 px-4 py-4">
+            {providerType === 'openai_compat' ? (
+              <>
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <Field label="配置名称">
+                    <Input
+                      value={name}
+                      onChange={(event) => {
+                        setName(event.target.value)
+                        setAutoName(false)
+                      }}
+                    />
+                  </Field>
+                  <Field label="接口地址" hint="一般保持自动填好的地址即可。">
+                    <Input
+                      value={baseUrl}
+                      placeholder="https://example.com/v1"
+                      onChange={(event) => changeBaseUrl(event.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <Field label="并发数" hint="同时请求的图片数，过高容易触发限流。">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={16}
+                      value={params.concurrency}
+                      onChange={(event) =>
+                        setParams((prev) => ({
+                          ...prev,
+                          concurrency: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="图片长边（像素）" hint="发送前等比缩小，减少用量。">
+                    <Input
+                      type="number"
+                      min={256}
+                      max={4096}
+                      step={64}
+                      value={params.max_image_side}
+                      onChange={(event) =>
+                        setParams((prev) => ({
+                          ...prev,
+                          max_image_side: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="请求超时（秒）">
+                    <Input
+                      type="number"
+                      min={5}
+                      max={600}
+                      value={params.timeout_s}
+                      onChange={(event) =>
+                        setParams((prev) => ({
+                          ...prev,
+                          timeout_s: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="温度">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      value={params.temperature}
+                      onChange={(event) =>
+                        setParams((prev) => ({
+                          ...prev,
+                          temperature: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="最大输出长度">
+                    <Input
+                      type="number"
+                      min={128}
+                      max={16384}
+                      step={128}
+                      value={params.max_tokens}
+                      onChange={(event) =>
+                        setParams((prev) => ({
+                          ...prev,
+                          max_tokens: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <div className="flex flex-col justify-center gap-1.5">
+                    <span className="text-xs font-medium text-ink/85">结构化输出</span>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={params.json_mode}
+                        label="结构化输出"
+                        onChange={(checked) =>
+                          setParams((prev) => ({
+                            ...prev,
+                            json_mode: checked,
+                          }))
+                        }
+                      />
+                      <span className="text-[10px] leading-relaxed text-faint">
+                        部分服务商需要开启
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <Field
+                  label="附加请求头（可选）"
+                  hint='JSON 对象，例如 {"X-DashScope-DataInspection":"enable"}。'
+                  error={headersError}
+                >
+                  <Textarea
+                    rows={2}
+                    value={headersText}
+                    placeholder='{"Header-Name": "value"}'
+                    onChange={(event) => setHeadersText(event.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="附加指令（可选）"
+                  hint="会追加到类别提示词之后，用于补充输出要求。"
+                >
+                  <Textarea
+                    rows={3}
+                    value={params.extra_instructions}
+                    placeholder="例如：优先检测距离较近的目标；不要输出被遮挡超过一半的框。"
+                    onChange={(event) =>
+                      setParams((prev) => ({
+                        ...prev,
+                        extra_instructions: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+              </>
+            ) : (
+              <Field label="配置名称">
+                <Input
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value)
+                    setAutoName(false)
+                  }}
+                />
+              </Field>
+            )}
           </div>
-        </div>
-
-        <Field
-          label="附加请求头（可选）"
-          hint='JSON 对象，例如 {"X-DashScope-DataInspection":"enable"}。'
-          error={headersError}
-        >
-          <Textarea
-            rows={2}
-            value={headersText}
-            placeholder='{"Header-Name": "value"}'
-            onChange={(event) => setHeadersText(event.target.value)}
-          />
-        </Field>
-
-        <Field label="附加指令（可选）" hint="会追加到类别提示词之后，用于补充输出要求。">
-          <Textarea
-            rows={3}
-            value={params.extra_instructions}
-            placeholder="例如：优先检测距离较近的目标；不要输出被遮挡超过一半的框。"
-            onChange={(event) =>
-              setParams((prev) => ({ ...prev, extra_instructions: event.target.value }))
-            }
-          />
-        </Field>
+        </details>
 
         {testResult ? (
           <div
             className={
               testResult.ok
-                ? 'rounded-xl border border-success/30 bg-success/5 px-4 py-3'
-                : 'rounded-xl border border-danger/30 bg-danger/5 px-4 py-3'
+                ? 'rounded-xl border border-success/25 bg-success/5 px-4 py-3'
+                : 'rounded-xl border border-danger/25 bg-danger/5 px-4 py-3'
             }
           >
             <div
@@ -585,15 +933,15 @@ function ModelConfigDialog({
             >
               {testResult.ok ? '连接成功' : '连接失败'}
             </div>
-            <div className="mt-1 text-xs leading-relaxed text-muted">
+            <div className="mt-1 text-[11px] leading-relaxed text-muted">
               {testResult.message}
             </div>
-            <div className="mt-1 text-[11px] text-faint">
-              耗时 {testResult.latency_ms} ms
-              {testResult.http_status ? ` · HTTP ${testResult.http_status}` : ''}
+            <div className="mt-1 text-[10px] text-faint">
+              耗时 {testResult.latency_ms} 毫秒
+              {testResult.http_status ? ` · 状态码 ${testResult.http_status}` : ''}
             </div>
             {testResult.raw_excerpt ? (
-              <pre className="mt-2 max-h-28 overflow-auto rounded-lg bg-bg/70 p-2 text-[10px] leading-relaxed text-faint">
+              <pre className="mt-2 max-h-28 overflow-auto rounded-lg border border-border bg-panel px-2.5 py-2 text-[10px] leading-relaxed text-faint">
                 {testResult.raw_excerpt}
               </pre>
             ) : null}

@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Cpu, FolderKanban, Plus, Trash2 } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Cpu,
+  FolderKanban,
+  FolderPlus,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { useCreateProject, useDeleteProject, useProjects } from '../api/projects.ts'
 import type { Project } from '../api/types.ts'
 import {
@@ -12,8 +19,18 @@ import {
   Input,
   Textarea,
 } from '../components/ui.tsx'
-import { formatDateTime } from '../lib/format.ts'
+import { formatDateTime, formatNumber } from '../lib/format.ts'
 import { useToast } from '../stores/toast.ts'
+import { cx } from '../lib/cx.ts'
+
+const PROJECT_TONES = [
+  'bg-[#F8E6DE] text-accent',
+  'bg-[#E7F0E9] text-success',
+  'bg-[#F8EFDC] text-warn',
+  'bg-[#E6EBF5] text-[#385C91]',
+  'bg-[#EFE8F4] text-[#7A4E8E]',
+  'bg-[#F4E8EC] text-[#9C4B63]',
+]
 
 export function ProjectsPage() {
   const projects = useProjects()
@@ -26,6 +43,9 @@ export function ProjectsPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
+
+  const projectList = projects.data ?? []
+  const totalImages = projectList.reduce((sum, project) => sum + project.image_count, 0)
 
   const resetForm = () => {
     setName('')
@@ -64,18 +84,32 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-end justify-between gap-4">
+    <div className="flex flex-col gap-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-ink">项目</h1>
-          <p className="mt-1 text-xs text-muted">
-            导入图片数据集，用模型预标注，人工审核后导出 YOLO / COCO。
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-panel/60 px-2.5 py-1 text-[10px] text-muted">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            {formatNumber(projectList.length)} 个项目
+            <span className="text-border-strong">·</span>
+            {formatNumber(totalImages)} 张图片
+          </div>
+          <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.035em] text-ink">
+            项目
+          </h1>
+          <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-muted">
+            导入未标注图片，用模型生成初稿，人工审核修正后导出 YOLO 或 COCO 数据集。
           </p>
         </div>
-        <Button variant="primary" onClick={() => setCreateOpen(true)}>
-          <Plus size={15} />
-          新建项目
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => navigate('/models')}>
+            <Cpu size={15} />
+            模型设置
+          </Button>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            <Plus size={15} />
+            新建项目
+          </Button>
+        </div>
       </div>
 
       {projects.isLoading ? (
@@ -83,7 +117,7 @@ export function ProjectsPage() {
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="h-44 animate-pulse rounded-2xl border border-border bg-panel"
+              className="h-52 animate-pulse rounded-2xl border border-border bg-panel/70"
             />
           ))}
         </div>
@@ -93,83 +127,127 @@ export function ProjectsPage() {
           description={projects.error.message}
           action={<Button onClick={() => projects.refetch()}>重新加载</Button>}
         />
-      ) : projects.data && projects.data.length > 0 ? (
+      ) : projectList.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {projects.data.map((project) => (
-            <div
-              key={project.id}
-              role="link"
-              tabIndex={0}
-              onClick={() => navigate(`/projects/${project.id}`)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  navigate(`/projects/${project.id}`)
-                }
-              }}
-              className="group relative cursor-pointer rounded-2xl border border-border bg-panel p-5 transition-colors hover:border-border-strong hover:bg-panel-2/60"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-accent/20 bg-accent-soft/60 text-accent">
-                  <FolderKanban size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-sm font-semibold text-ink">{project.name}</h2>
-                  <p className="mt-1 line-clamp-2 min-h-8 text-xs leading-relaxed text-muted">
-                    {project.description || '暂无描述'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  aria-label={`删除项目 ${project.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    setDeleteTarget(project)
-                  }}
-                  className="rounded-lg p-1.5 text-faint opacity-0 transition-all hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] text-muted">
-                <div className="rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="text-ink">{project.image_count}</div>
-                  <div>图片</div>
-                </div>
-                <div className="rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="text-ink">{project.class_count}</div>
-                  <div>类别</div>
-                </div>
-                <div className="truncate rounded-lg bg-panel-2 px-2.5 py-2">
-                  <div className="truncate text-ink">
-                    {project.model_name ?? '未选择模型'}
+          {projectList.map((project, index) => {
+            const tone = PROJECT_TONES[index % PROJECT_TONES.length]
+            return (
+              <div
+                key={project.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/projects/${project.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    navigate(`/projects/${project.id}`)
+                  }
+                }}
+                className="group relative flex cursor-pointer flex-col rounded-2xl border border-border bg-panel/80 p-5 shadow-card transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:bg-panel hover:shadow-panel"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={cx(
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                      tone,
+                    )}
+                  >
+                    <FolderKanban size={18} />
                   </div>
-                  <div>模型</div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-ink">
+                      {project.name}
+                    </h2>
+                    <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-relaxed text-muted">
+                      {project.description || '暂无描述'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`删除项目 ${project.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setDeleteTarget(project)
+                    }}
+                    className="rounded-lg p-1.5 text-faint opacity-0 transition-all hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                <div className="mt-auto pt-5">
+                  <div className="flex items-end justify-between gap-3 border-t border-border/70 pt-4">
+                    <div className="flex items-center gap-5">
+                      <div>
+                        <div className="text-[19px] font-semibold leading-none tracking-tight tabular-nums text-ink">
+                          {formatNumber(project.image_count)}
+                        </div>
+                        <div className="mt-1 text-[9px] text-faint">图片</div>
+                      </div>
+                      <span className="h-6 w-px bg-border" />
+                      <div>
+                        <div className="text-[19px] font-semibold leading-none tracking-tight tabular-nums text-ink">
+                          {formatNumber(project.class_count)}
+                        </div>
+                        <div className="mt-1 text-[9px] text-faint">类别</div>
+                      </div>
+                    </div>
+                    <span
+                      className={cx(
+                        'inline-flex max-w-[45%] items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px]',
+                        project.model_name
+                          ? 'border-border bg-panel-2/60 text-muted'
+                          : 'border-warn/20 bg-warn/5 text-warn',
+                      )}
+                    >
+                      <Cpu size={10} className="shrink-0" />
+                      <span className="truncate">
+                        {project.model_name ?? '未选择模型'}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-[9px] text-faint">
+                    <span>更新于 {formatDateTime(project.updated_at)}</span>
+                    <span className="flex items-center gap-1 text-muted opacity-0 transition-opacity group-hover:opacity-100">
+                      打开项目
+                      <ArrowUpRight size={11} />
+                    </span>
+                  </div>
                 </div>
               </div>
-
-              <div className="mt-3 flex items-center justify-between text-[11px] text-faint">
-                <span className="inline-flex items-center gap-1">
-                  <Cpu size={12} />
-                  {project.model_name ? '已接入模型' : '尚未接入模型'}
-                </span>
-                <span>更新于 {formatDateTime(project.updated_at)}</span>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
-        <EmptyState
-          icon={<FolderKanban size={34} />}
-          title="还没有项目"
-          description="创建第一个项目，把图片数据集变成可训练的标注。"
-          action={
-            <Button variant="primary" onClick={() => setCreateOpen(true)}>
-              <Plus size={15} />
-              新建项目
-            </Button>
-          }
-        />
+        <div className="flex flex-col gap-4">
+          <EmptyState
+            icon={<FolderPlus size={28} />}
+            title="还没有项目"
+            description="创建第一个项目，把一堆未标注图片变成可训练的检测数据集。"
+            action={
+              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                <Plus size={15} />
+                新建项目
+              </Button>
+            }
+          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              ['01', '新建项目', '一个项目对应一份数据集和一套类别配置。'],
+              ['02', '写类别提示词', '描述目标外观，帮模型找准需要标注的内容。'],
+              ['03', '导入并审核', '预标注后逐张确认，随时导出训练格式。'],
+            ].map(([index, title, detail]) => (
+              <div
+                key={index}
+                className="rounded-2xl border border-border bg-panel/55 px-4 py-4"
+              >
+                <div className="font-mono text-[10px] text-accent">{index}</div>
+                <div className="mt-1.5 text-xs font-medium text-ink">{title}</div>
+                <p className="mt-1 text-[10px] leading-relaxed text-faint">{detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <Dialog

@@ -150,7 +150,7 @@ export function PrelabelDialog({
         <div className="flex flex-col gap-4">
           <div className="rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-xs leading-relaxed text-muted">
             本次将为 <span className="font-medium text-ink">{imageIds.length}</span> 张图片各发送
-            1 次模型请求，按类别筛选后会更省调用次数。已有 AI 预标框会被本次结果替换，人工标注框会保留。
+            1 次模型请求，按类别筛选后会更省调用次数。已有模型预标框会被本次结果替换，人工标注框会保留。
           </div>
 
           <div>
@@ -158,7 +158,7 @@ export function PrelabelDialog({
               <span className="text-xs font-medium text-muted">参与预标注的类别</span>
               <button
                 type="button"
-                className="text-[11px] text-accent hover:text-[#7ea6ff]"
+                className="text-[11px] text-accent hover:text-accent-hover"
                 onClick={() =>
                   setSelectedClasses(
                     selectedClasses.size === classes.length

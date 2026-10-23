@@ -1,11 +1,11 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 Write-Host "启动 LabelING 后端（http://127.0.0.1:8000）..." -ForegroundColor Cyan
 Start-Process powershell -ArgumentList @(
   "-NoExit",
   "-Command",
-  "Set-Location '$root\backend'; uv run uvicorn app.main:app --reload --port 8000"
+  "Set-Location '$root\backend'; uv run uvicorn app.main:create_app --factory --reload --port 8000"
 )
 
 Write-Host "启动 LabelING 前端开发服务器（http://127.0.0.1:5173）..." -ForegroundColor Cyan

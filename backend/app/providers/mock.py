@@ -52,3 +52,6 @@ class MockProvider:
             latency_ms=0,
             parsed_count=1,
         )
+
+    async def list_models(self, config: ModelConfigSpec) -> list[str]:
+        return ["mock-vision"]

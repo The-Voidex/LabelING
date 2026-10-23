@@ -13,7 +13,7 @@ export function statusLabel(status: string): string {
 }
 
 export function sourceLabel(source: string): string {
-  return source === 'ai' ? 'AI 预标' : '人工'
+  return source === 'ai' ? '模型预标' : '人工'
 }
 
 export const JOB_STATUS_LABELS: Record<string, string> = {

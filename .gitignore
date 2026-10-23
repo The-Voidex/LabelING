@@ -16,3 +16,8 @@ data/
 .env
 .env.local
 *.log
+
+# 桌面打包产物
+build/
+dist/
+.tmp-shots/

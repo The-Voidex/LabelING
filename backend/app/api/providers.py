@@ -6,12 +6,16 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app.errors import AppError
 from app.models import ModelConfig, Project, utcnow
-from app.providers.base import ModelConfigSpec, normalize_params
+from app.providers.base import ModelConfigSpec, ProviderError, normalize_params
+from app.providers.discovery import rank_models
 from app.providers.registry import get_provider
 from app.schemas import (
     ModelConfigCreate,
     ModelConfigRead,
+    ModelConfigTestDraft,
     ModelConfigUpdate,
+    ModelDiscoveryRequest,
+    ModelDiscoveryResult,
     ProviderTestResult,
 )
 
@@ -47,7 +51,7 @@ def _validate_provider(provider_type: str, base_url: str, model_name: str) -> No
         raise AppError("接口类型只能是 OpenAI 兼容或模拟", code="invalid_provider_type")
     if provider_type == "openai_compat":
         if not base_url.strip():
-            raise AppError("OpenAI 兼容接口需要填写 Base URL", code="missing_base_url")
+            raise AppError("OpenAI 兼容接口需要填写接口地址", code="missing_base_url")
         if not model_name.strip():
             raise AppError("OpenAI 兼容接口需要填写模型名称", code="missing_model_name")
 
@@ -161,15 +165,52 @@ async def test_config(config_id: int, session: Session = Depends(get_session)) -
 
 
 @router.post("/test-draft", response_model=ProviderTestResult)
-async def test_draft(payload: ModelConfigCreate) -> ProviderTestResult:
-    _validate_provider(payload.provider_type, payload.base_url, payload.model_name)
+async def test_draft(
+    payload: ModelConfigTestDraft, session: Session = Depends(get_session)
+) -> ProviderTestResult:
+    saved = _get_config(session, payload.config_id) if payload.config_id else None
+    base_url = payload.base_url.strip() or (saved.base_url if saved else "")
+    model_name = payload.model_name.strip() or (saved.model_name if saved else "")
+    api_key = payload.api_key.strip() or (saved.api_key if saved else "")
+    _validate_provider(payload.provider_type, base_url, model_name)
     provider = get_provider(payload.provider_type)
     spec = ModelConfigSpec(
         provider_type=payload.provider_type,
-        base_url=payload.base_url.strip(),
-        api_key=payload.api_key.strip(),
-        model_name=payload.model_name.strip(),
+        base_url=base_url,
+        api_key=api_key,
+        model_name=model_name,
         params=normalize_params(payload.params),
     )
     result = await provider.test(spec)
     return ProviderTestResult(**result.__dict__)
+
+
+@router.post("/discover-models", response_model=ModelDiscoveryResult)
+async def discover_models(
+    payload: ModelDiscoveryRequest, session: Session = Depends(get_session)
+) -> ModelDiscoveryResult:
+    saved = _get_config(session, payload.config_id) if payload.config_id else None
+    base_url = payload.base_url.strip() or (saved.base_url if saved else "")
+    api_key = payload.api_key.strip() or (saved.api_key if saved else "")
+    if payload.provider_type != "mock" and not base_url:
+        raise AppError("请填写接口地址", code="missing_base_url")
+
+    provider = get_provider(payload.provider_type)
+    spec = ModelConfigSpec(
+        provider_type=payload.provider_type,
+        base_url=base_url,
+        api_key=api_key,
+        model_name=(payload.default_model or "").strip(),
+        params=normalize_params({}),
+    )
+    try:
+        models = await provider.list_models(spec)
+    except ProviderError as exc:
+        raise AppError(exc.message, status_code=400, code=exc.kind, details=exc.raw[:500]) from exc
+
+    ordered, recommended = rank_models(models, payload.default_model)
+    return ModelDiscoveryResult(
+        models=ordered,
+        recommended=recommended,
+        count=len(ordered),
+    )

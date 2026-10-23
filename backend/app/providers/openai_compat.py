@@ -35,10 +35,32 @@ def _prepare_image(image_bytes: bytes, max_side: int) -> tuple[str, int, int]:
 def _endpoint(base_url: str) -> str:
     base = (base_url or "").strip().rstrip("/")
     if not base:
-        raise ProviderError("config", "请填写 Base URL")
+        raise ProviderError("config", "请填写接口地址")
     if base.endswith("/chat/completions"):
         return base
     return f"{base}/chat/completions"
+
+
+def _models_endpoint(base_url: str) -> str:
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        raise ProviderError("config", "请填写接口地址")
+    if base.endswith("/chat/completions"):
+        base = base[: -len("/chat/completions")]
+    if base.endswith("/models"):
+        return base
+    return f"{base}/models"
+
+
+def _headers(config: ModelConfigSpec) -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if config.api_key.strip():
+        headers["Authorization"] = f"Bearer {config.api_key.strip()}"
+    extra_headers = config.params.get("extra_headers") or {}
+    if isinstance(extra_headers, dict):
+        for key, value in extra_headers.items():
+            headers[str(key)] = str(value)
+    return headers
 
 
 def _test_image() -> bytes:
@@ -86,14 +108,7 @@ class OpenAICompatProvider:
         if config.params.get("json_mode"):
             payload["response_format"] = {"type": "json_object"}
 
-        headers = {"Content-Type": "application/json"}
-        if config.api_key.strip():
-            headers["Authorization"] = f"Bearer {config.api_key.strip()}"
-        extra_headers = config.params.get("extra_headers") or {}
-        if isinstance(extra_headers, dict):
-            for key, value in extra_headers.items():
-                headers[str(key)] = str(value)
-
+        headers = _headers(config)
         timeout = float(config.params.get("timeout_s", 120.0))
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
@@ -106,7 +121,7 @@ class OpenAICompatProvider:
         raw_text = response.text or ""
         if response.status_code in (401, 403):
             raise ProviderError(
-                "auth", "模型鉴权失败，请检查 API Key", response.status_code, raw_text[:2000]
+                "auth", "模型鉴权失败，请检查接口密钥", response.status_code, raw_text[:2000]
             )
         if response.status_code == 429:
             raise ProviderError(
@@ -118,7 +133,7 @@ class OpenAICompatProvider:
         if response.status_code >= 500:
             raise ProviderError(
                 "server_error",
-                f"模型服务返回错误（HTTP {response.status_code}）",
+                f"模型服务返回错误（状态码 {response.status_code}）",
                 response.status_code,
                 raw_text[:2000],
             )
@@ -135,7 +150,7 @@ class OpenAICompatProvider:
                 detail = ""
             raise ProviderError(
                 "bad_request",
-                f"模型请求被拒绝（HTTP {response.status_code}）{('：' + detail) if detail else ''}",
+                f"模型请求被拒绝（状态码 {response.status_code}）{('：' + detail) if detail else ''}",
                 response.status_code,
                 raw_text[:2000],
             )
@@ -206,3 +221,57 @@ class OpenAICompatProvider:
             latency_ms=latency,
             parsed_count=len(result.detections),
         )
+
+    async def list_models(self, config: ModelConfigSpec) -> list[str]:
+        url = _models_endpoint(config.base_url)
+        timeout = min(float(config.params.get("timeout_s", 120.0)), 20.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                response = await client.get(url, headers=_headers(config))
+            except httpx.TimeoutException as exc:
+                raise ProviderError("timeout", "获取模型列表超时，请稍后重试") from exc
+            except httpx.RequestError as exc:
+                raise ProviderError("network", f"无法连接模型接口：{exc}") from exc
+
+        raw_text = response.text or ""
+        if response.status_code in (401, 403):
+            raise ProviderError(
+                "auth", "模型鉴权失败，请检查接口密钥", response.status_code, raw_text[:2000]
+            )
+        if response.status_code >= 400:
+            detail = ""
+            try:
+                error_body = response.json()
+                detail = str(
+                    (error_body.get("error") or {}).get("message")
+                    if isinstance(error_body, dict)
+                    else ""
+                )
+            except Exception:
+                detail = ""
+            raise ProviderError(
+                "bad_request",
+                f"无法获取模型列表（状态码 {response.status_code}）{('：' + detail) if detail else ''}",
+                response.status_code,
+                raw_text[:2000],
+            )
+
+        try:
+            data = response.json()
+            items = data.get("data") if isinstance(data, dict) else data
+            models = sorted(
+                {
+                    str(item.get("id")).strip()
+                    for item in items
+                    if isinstance(item, dict) and item.get("id")
+                }
+            )
+        except Exception as exc:
+            raise ProviderError(
+                "bad_response", "模型列表返回结构无法识别", response.status_code, raw_text[:2000]
+            ) from exc
+        if not models:
+            raise ProviderError(
+                "bad_response", "接口没有返回可用的模型", response.status_code, raw_text[:2000]
+            )
+        return models

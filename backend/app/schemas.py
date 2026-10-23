@@ -178,6 +178,24 @@ class ModelConfigCreate(BaseModel):
     is_default: bool = False
 
 
+class ModelConfigTestDraft(ModelConfigCreate):
+    config_id: int | None = None
+
+
+class ModelDiscoveryRequest(BaseModel):
+    provider_type: str = "openai_compat"
+    base_url: str = ""
+    api_key: str = ""
+    config_id: int | None = None
+    default_model: str | None = None
+
+
+class ModelDiscoveryResult(BaseModel):
+    models: list[str]
+    recommended: str | None = None
+    count: int = 0
+
+
 class ModelConfigUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     provider_type: str | None = None

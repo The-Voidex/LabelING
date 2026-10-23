@@ -20,7 +20,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   if (!response.ok) {
     const data = await response.json().catch(() => null)
     const message =
-      data?.error?.message ?? `请求失败（HTTP ${response.status}）`
+      data?.error?.message ?? `请求失败（状态码 ${response.status}）`
     throw new ApiError(message, response.status, data?.error?.code)
   }
   if (response.status === 204) {

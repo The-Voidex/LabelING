@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from app.api import images as images_api
 from app.api import jobs as jobs_api
 from app.api import projects as projects_api
 from app.api import providers as providers_api
+from app.api import system as system_api
 from app.config import Settings
 from app.db import create_engine_for, init_db
 from app.errors import error_payload, install_error_handlers
@@ -52,12 +54,15 @@ def _install_frontend(app: FastAPI, settings: Settings) -> None:
             return HTMLResponse(
                 """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8" />
                 <title>LabelING</title></head>
-                <body style="font-family: sans-serif; background:#0e1014; color:#e9ebf1;
-                display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0">
-                <div style="text-align:center">
-                <h1 style="font-size:20px">LabelING 前端尚未构建</h1>
-                <p style="color:#98a0b3">请在 frontend 目录运行 <code>npm run build</code>，
-                然后重新启动服务。</p>
+                <body style="font-family:'Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+                background:#f3efe6; color:#27231d; display:flex; align-items:center;
+                justify-content:center; min-height:100vh; margin:0">
+                <div style="text-align:center; background:#fcfaf5; border:1px solid #e2dbcc;
+                border-radius:18px; padding:32px 40px; box-shadow:0 24px 60px -32px rgba(39,35,29,.3)">
+                <h1 style="font-size:20px; margin:0">LabelING 前端尚未构建</h1>
+                <p style="color:#6f6759; font-size:13px; margin:10px 0 0">请在 frontend 目录运行
+                <code style="background:#f2ece1; border:1px solid #e2dbcc; border-radius:6px;
+                padding:2px 6px; font-size:12px">npm run build</code>，然后重新启动服务。</p>
                 </div></body></html>"""
             )
 
@@ -100,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.started_at = time.time()
     app.state.engine = create_engine_for(settings)
     init_db(app.state.engine)
     install_error_handlers(app)
@@ -113,6 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(providers_api.router, prefix="/api")
     app.include_router(jobs_api.router, prefix="/api")
     app.include_router(export_api.router, prefix="/api")
+    app.include_router(system_api.router, prefix="/api")
 
     @app.middleware("http")
     async def require_client_header(request, call_next):
@@ -144,6 +151,3 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     _install_frontend(app, settings)
     return app
-
-
-app = create_app()

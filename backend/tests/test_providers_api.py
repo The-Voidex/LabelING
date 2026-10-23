@@ -55,7 +55,7 @@ def test_openai_config_requires_base_url(client):
         json={"name": "不完整", "provider_type": "openai_compat", "model_name": "qwen"},
     )
     assert response.status_code == 400
-    assert "Base URL" in response.json()["error"]["message"]
+    assert "接口地址" in response.json()["error"]["message"]
 
 
 def test_delete_config_in_use(client):
@@ -79,3 +79,62 @@ def test_draft_test(client):
     assert response.status_code == 200
     assert response.json()["ok"] is True
     assert response.json()["parsed_count"] == 1
+
+
+def test_draft_test_uses_saved_key_when_blank(client, monkeypatch):
+    captured: dict[str, str] = {}
+
+    async def fake_test(self, spec):
+        from app.providers.base import TestResult
+
+        captured["key"] = spec.api_key
+        return TestResult(ok=True, message="ok")
+
+    monkeypatch.setattr(
+        "app.providers.openai_compat.OpenAICompatProvider.test", fake_test
+    )
+    created = client.post(
+        "/api/model-configs",
+        json={
+            "name": "已保存",
+            "provider_type": "openai_compat",
+            "base_url": "https://example.com/v1",
+            "api_key": "sk-saved-key",
+            "model_name": "vision-model",
+        },
+    )
+    assert created.status_code == 201
+    response = client.post(
+        "/api/model-configs/test-draft",
+        json={
+            "name": "已保存",
+            "provider_type": "openai_compat",
+            "base_url": "https://example.com/v1",
+            "api_key": "",
+            "model_name": "vision-model",
+            "config_id": created.json()["id"],
+        },
+    )
+    assert response.status_code == 200
+    assert captured["key"] == "sk-saved-key"
+
+
+def test_discover_models_with_mock_provider(client):
+    response = client.post(
+        "/api/model-configs/discover-models",
+        json={"provider_type": "mock", "base_url": "mock", "default_model": "mock-vision"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["models"] == ["mock-vision"]
+    assert data["recommended"] == "mock-vision"
+    assert data["count"] == 1
+
+
+def test_discover_models_requires_base_url(client):
+    response = client.post(
+        "/api/model-configs/discover-models",
+        json={"provider_type": "openai_compat", "base_url": ""},
+    )
+    assert response.status_code == 400
+    assert "接口地址" in response.json()["error"]["message"]

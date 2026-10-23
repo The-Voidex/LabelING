@@ -70,6 +70,8 @@ class Provider(Protocol):
 
     async def test(self, config: ModelConfigSpec) -> TestResult: ...
 
+    async def list_models(self, config: ModelConfigSpec) -> list[str]: ...
+
 
 DEFAULT_PARAMS: dict[str, Any] = {
     "concurrency": 2,
