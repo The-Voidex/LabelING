@@ -11,6 +11,9 @@ datas = [
 ]
 
 hiddenimports = collect_submodules("uvicorn") + [
+    "webview.platforms.winforms",
+    "webview.platforms.edgechromium",
+    "webview.platforms.mshtml",
     "pystray._win32",
     "pystray._base",
     "pystray._util",

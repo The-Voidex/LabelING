@@ -12,7 +12,7 @@ from app.errors import AppError
 
 router = APIRouter(tags=["system"])
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 

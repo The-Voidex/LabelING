@@ -9,49 +9,49 @@
 - 图片网格、状态筛选、批量接受、批量删除
 - 标注工作台：Q 浏览 / W 框选双模式、悬停查看框信息、画框 / 移动 / 缩放 / 改类别 / 撤销重做 / 自动保存
 - 三态审核：未标注 → 待审核 → 已确认
-- 服务状态面板与 Windows 系统托盘：随时查看运行状态、打开数据目录、安全关闭服务
+- Windows 系统托盘：打开界面、打开数据目录、彻底退出
 - 模型预标注：OpenAI 兼容视觉接口（DeepSeek、千问、智谱等），每张图一次请求，全类别提示词
 - 模型配置预设：内置 DeepSeek、阿里云百炼、智谱；通常只需粘贴接口密钥，接口地址和视觉模型自动填好
 - 可从接口读取可用模型列表，并推荐视觉模型；仍支持任意 OpenAI 兼容接口
 - 可插拔模型适配层；内置模拟模型，无需接口密钥即可体验完整流程
-- Windows 桌面版：可执行程序、系统托盘、桌面快捷方式，点击即启动服务并打开界面
+- Windows 桌面版：独立窗口（WebView2）、系统托盘、桌面快捷方式，不依赖浏览器
 - 异步预标注任务：进度、取消、重试、逐图失败原因、token 用量
 - 导出 YOLO txt（zip）与 COCO JSON（zip），含清单与中文说明
 - 引用/复制两种图片模式，缺失文件检测与重新定位
 
 ## 环境要求
 
-- 使用桌面安装版：Windows 10/11，无需安装 Python 或 Node.js
+- 使用桌面安装版：Windows 10/11，无需安装 Python 或 Node.js；系统需要 Microsoft Edge WebView2 运行时（Windows 11 和大多数 Windows 10 已自带）
 - 从源码运行或打包：Python 3.12+、[uv](https://docs.astral.sh/uv/)、Node.js 20+ 与 npm
 
 ## 快速开始（源码运行）
 
 ```powershell
-# 1. 安装后端依赖
+# 1. 安装后端依赖（含桌面窗口依赖）
 cd backend
-uv sync
+uv sync --group desktop
 
 # 2. 安装前端依赖
 cd ..\frontend
 npm install
 
-# 3. 启动服务（自动构建前端并显示托盘图标）
+# 3. 启动独立窗口（自动构建前端）
 cd ..
 powershell -ExecutionPolicy Bypass -File scripts/start.ps1
 ```
 
-打开 <http://127.0.0.1:8000>。
+`start.ps1` 会构建前端、启动本地服务并打开 LabelING 独立窗口。关闭窗口（X）只会收起到系统托盘，右键托盘图标选择「彻底退出」才会关闭窗口并结束进程。
 
-`start.ps1` 会构建前端、启动本地服务，并在 Windows 任务栏托盘显示 LabelING 图标。也可以手动启动：
+仍然可以只启动服务、用浏览器访问：
 
 ```powershell
 cd backend
 uv run python -m app.server
 ```
 
-手动启动时没有系统托盘，但仍可在网页左下角的「本地服务」面板中查看状态并关闭服务。
+这种方式没有独立窗口和托盘，在启动服务的窗口按 `Ctrl+C` 停止。
 
-开发模式（前端热更新）：
+开发模式（前端热更新，使用浏览器）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
@@ -70,7 +70,7 @@ uv run python ..\scripts\make_demo_images.py
 
 ## Windows 桌面版
 
-桌面版是一个自带 Python 运行时与前端资源的可执行程序，适合日常使用。界面仍显示在默认浏览器中，后台服务由系统托盘管理。
+桌面版是一个自带 Python 运行时、前端资源与 WebView2 窗口的可执行程序，界面运行在独立窗口中，不依赖外部浏览器，后台服务由系统托盘管理。
 
 构建：
 
@@ -94,8 +94,10 @@ powershell -ExecutionPolicy Bypass -File scripts/install_desktop.ps1 -MigrateDat
 - 程序安装目录：`%LOCALAPPDATA%\Programs\LabelING`
 - 桌面版数据目录：`%LOCALAPPDATA%\LabelING`
 - 日志：`%LOCALAPPDATA%\LabelING\logs\labeling.log`
-- 点击快捷方式会自动启动服务、显示托盘图标并打开浏览器；重复点击会直接打开已运行的实例。
-- 关闭服务：右键托盘图标选择「关闭服务并退出」，或在网页左下角「本地服务」中关闭。
+- 点击快捷方式会启动服务、显示托盘图标并打开独立窗口；重复点击会把已运行的窗口带到前台。
+- 关闭窗口（X）只会把窗口收起到系统托盘，服务继续运行；单击托盘图标或双击可重新打开窗口。
+- 彻底退出：右键托盘图标，选择「彻底退出」。窗口会同时关闭，进程完全结束。
+- 如果系统缺少 WebView2 运行时，程序启动时会给出提示，可从 <https://developer.microsoft.com/zh-cn/microsoft-edge/webview2/> 安装。
 
 > 桌面版当前未做代码签名，Windows SmartScreen 可能提示「未知发布者」，选择「更多信息 → 仍要运行」即可。
 
@@ -116,9 +118,10 @@ powershell -ExecutionPolicy Bypass -File scripts/install_desktop.ps1 -MigrateDat
 
 ## 启动与关闭
 
-- **网页内**：左下角「本地服务」卡片会显示运行状态。点击后可查看访问地址、进程号、运行时长、数据目录，并安全关闭服务。
-- **Windows 托盘**：源码模式通过 `scripts/start.ps1` 启动，或桌面版通过快捷方式启动后，任务栏右下角会出现 LabelING 图标（Windows 11 可能收在托盘溢出菜单中）。右键可选择打开界面、打开数据文件夹、关闭服务并退出；双击图标直接打开界面。
-- **命令行**：源码模式下在启动服务的窗口按 `Ctrl+C` 也可以停止服务。
+- **桌面窗口**：通过快捷方式、`LabelING.exe` 或 `scripts/start.ps1` 启动后，界面显示在独立窗口中。点击关闭按钮只会把窗口收起到托盘，服务继续运行。
+- **Windows 托盘**：任务栏右下角会出现 LabelING 图标（Windows 11 可能收在托盘溢出菜单中）。单击或双击图标重新打开窗口；右键菜单可以打开界面、打开数据文件夹、查看运行状态，或选择「彻底退出」。
+- **彻底退出**：右键托盘图标选择「彻底退出」，窗口和本地服务会一起关闭，进程完全结束。
+- **命令行**：使用 `python -m app.server` 启动时没有托盘，在启动服务的窗口按 `Ctrl+C` 停止。
 
 关闭服务会中断正在进行的预标注任务，建议先等待任务完成。
 
@@ -183,11 +186,41 @@ npm run lint
 powershell -ExecutionPolicy Bypass -File scripts/build_desktop.ps1
 ```
 
+## 版本发布（GitHub Releases）
+
+仓库只提交源码；`dist/`、`build/`、`data/` 已被 `.gitignore` 排除。安装包请放到 GitHub Releases，不要提交进仓库。
+
+首次上传：
+
+```powershell
+git remote add origin https://github.com/<用户名>/LabelING.git
+git push -u origin main
+```
+
+每个版本单独打标签并推送：
+
+```powershell
+git tag -a v1.2.0 -m "LabelING v1.2.0"
+git push origin v1.2.0
+```
+
+构建并发布安装包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_desktop.ps1
+New-Item -ItemType Directory -Force release | Out-Null
+Compress-Archive -Path dist\LabelING -DestinationPath release\LabelING-v1.2.0-win-x64.zip
+gh release create v1.2.0 release\LabelING-v1.2.0-win-x64.zip --title "LabelING v1.2.0" --notes "独立窗口与托盘退出改进"
+```
+
+`release/` 与 `dist/` 都不会进入 Git，安装包只作为 Release 附件上传。
+
+不用命令行也可以在 GitHub 仓库的 Releases 页面点击「Draft a new release」，选择标签、填写说明并上传 zip。历史版本可以先在对应标签上构建，再分别创建 Release；当时未提供桌面构建的版本可以只保留源码标签。
+
 ## 已知限制
 
 - 仅本机单用户，无登录体系；服务只监听 127.0.0.1。
-- 桌面安装版目前仅提供 Windows 构建；其他系统可从源码运行。
-- 桌面版仍使用默认浏览器显示界面，不是独立原生窗口；未做代码签名。
+- 桌面版仅提供 Windows 构建，依赖 Microsoft Edge WebView2 运行时；其他系统可从源码运行；未做代码签名。
 - 仅矩形框目标检测，暂不支持分割、关键点、旋转框。
 - 预标注质量取决于所选视觉模型的坐标输出能力，需要人工审核兜底。
 - 单次导入最多 5000 张；建议单项目不超过约 2000 张。

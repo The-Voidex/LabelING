@@ -52,7 +52,7 @@ export function ExportPage() {
     document.body.appendChild(link)
     link.click()
     link.remove()
-    toast('已开始生成导出包，浏览器将自动下载', 'success')
+    toast('已开始生成导出包，请选择保存位置', 'success')
   }
 
   return (
@@ -165,7 +165,7 @@ export function ExportPage() {
                 导出并下载
               </Button>
               <p className="mt-2 text-center text-[9px] text-faint">
-                {available === 0 ? '当前范围还没有可导出的图片' : '生成完成后浏览器会自动下载'}
+                {available === 0 ? '当前范围还没有可导出的图片' : '生成完成后会弹出保存位置'}
               </p>
             </div>
             <div className="flex items-center gap-2 border-t border-accent/15 bg-panel/35 px-5 py-3 text-[10px] text-muted">

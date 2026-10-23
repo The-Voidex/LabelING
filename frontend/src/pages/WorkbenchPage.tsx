@@ -38,7 +38,6 @@ import type { ImageNavItem, ImageStatus } from '../api/types.ts'
 import { AnnotationPanel } from '../components/AnnotationPanel.tsx'
 import { BrandMark } from '../components/BrandMark.tsx'
 import { PrelabelDialog } from '../components/PrelabelDialog.tsx'
-import { ServiceStatusButton } from '../components/ServiceDialog.tsx'
 import { StatusBadge } from '../components/StatusBadge.tsx'
 import { ThumbnailRail } from '../components/ThumbnailRail.tsx'
 import {
@@ -605,7 +604,6 @@ export function WorkbenchPage() {
             {isConfirmed ? '撤销确认' : '确认标注'}
           </Button>
           <span className="mx-0.5 hidden h-4 w-px bg-border sm:block" />
-          <ServiceStatusButton compact />
           <button
             type="button"
             aria-label="快捷键说明"

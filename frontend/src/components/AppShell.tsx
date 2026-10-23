@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Cpu, FolderKanban } from 'lucide-react'
 import { BrandLockup, BrandMark } from './BrandMark.tsx'
-import { ServiceStatusButton } from './ServiceDialog.tsx'
 import { cx } from '../lib/cx.ts'
 
 const NAV_ITEMS = [
@@ -67,11 +66,10 @@ export function AppShell() {
           <div className="rounded-xl border border-border/70 bg-panel/45 px-3.5 py-3">
             <div className="text-[10px] font-medium text-muted">数据留在本机</div>
             <p className="mt-1 text-[10px] leading-relaxed text-faint">
-              图片、密钥与标注均保存在 data 目录，建议定期整目录备份。
+              图片、密钥与标注均保存在本机数据目录，建议定期整目录备份。
             </p>
           </div>
-          <ServiceStatusButton />
-          <p className="px-1 text-[10px] text-faint">LabelING · 本地版 1.1</p>
+          <p className="px-1 text-[10px] text-faint">LabelING · 本地版 1.2</p>
         </div>
       </aside>
 
@@ -105,7 +103,6 @@ export function AppShell() {
                 </NavLink>
               )
             })}
-            <ServiceStatusButton compact />
           </nav>
         </header>
 

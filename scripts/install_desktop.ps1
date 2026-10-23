@@ -16,7 +16,7 @@ if (-not (Test-Path $exeSource)) {
 
 $running = Get-Process -Name "LabelING" -ErrorAction SilentlyContinue
 if ($running) {
-  throw "LabelING 正在运行，请先从托盘图标选择「关闭服务并退出」，再重新安装。"
+  throw "LabelING 正在运行，请先从托盘图标选择「彻底退出」，再重新安装。"
 }
 
 Write-Host "安装到：$installDir" -ForegroundColor Cyan

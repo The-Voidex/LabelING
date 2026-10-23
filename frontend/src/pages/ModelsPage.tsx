@@ -547,7 +547,7 @@ function ModelConfigDialog({
   const saving = createConfig.isPending || updateConfig.isPending
   const savedKeyHint = editing?.has_api_key
     ? `已保存 ${editing.api_key_masked}，留空表示不修改。`
-    : '仅保存在本机数据库，不会回传到浏览器。'
+    : '仅保存在本机数据库，不会显示在界面上。'
 
   return (
     <Dialog
